@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use chrono::Local;
 use rand::rngs::StdRng;
-use rand::{Rng, SeedableRng};
+use rand::{RngExt, SeedableRng};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::collections::HashMap;
@@ -281,7 +281,7 @@ impl McpServer {
         // Use deterministic RNG with date seed and database name
         let db_seed = seed.wrapping_add(database.bytes().map(|b| b as u64).sum::<u64>());
         let mut rng = StdRng::seed_from_u64(db_seed);
-        let idx = rng.gen_range(0..filtered.len());
+        let idx = rng.random_range(0..filtered.len());
 
         Ok(&self.fortunes[filtered[idx]])
     }
@@ -313,7 +313,7 @@ impl McpServer {
 
         // Use deterministic RNG with date seed
         let mut rng = StdRng::seed_from_u64(seed);
-        let index = rng.gen_range(0..indices.len());
+        let index = rng.random_range(0..indices.len());
 
         &self.fortunes[indices[index]]
     }
