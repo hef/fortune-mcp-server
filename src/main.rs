@@ -133,8 +133,10 @@ impl McpServer {
             let path = entry.path();
 
             // Skip .dat files and hidden files
-            if let Some(name) = path.file_name().and_then(|n| n.to_str())
-                && (name.ends_with(".dat") || name.starts_with('.'))
+            if path
+                .file_name()
+                .and_then(|n| n.to_str())
+                .is_some_and(|name| name.ends_with(".dat") || name.starts_with('.'))
             {
                 continue;
             }
