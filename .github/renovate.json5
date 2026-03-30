@@ -3,16 +3,19 @@
   "extends": [
     "config:base"
   ],
+  "platformAutomerge": true,
   "packageRules": [
     {
       "matchManagers": ["cargo"],
       "semanticCommitType": "chore",
-      "semanticCommitScope": "deps"
+      "semanticCommitScope": "deps",
+      "automerge": true
     },
     {
       "matchManagers": ["dockerfile"],
       "semanticCommitType": "chore",
-      "semanticCommitScope": "docker"
+      "semanticCommitScope": "docker",
+      "automerge": true
     }
   ],
   "rust": {
