@@ -192,10 +192,6 @@ impl McpServer {
             .collect()
     }
 
-    fn get_daily_fortune(&self) -> &Fortune {
-        self.get_filtered_fortune(None, false, false)
-    }
-
     fn get_fortune_from_database(&self, database: &str, short_only: bool, allow_offensive: bool) -> Result<&Fortune, JsonRpcError> {
         let indices = self.databases.get(database).ok_or_else(|| JsonRpcError {
             code: -32602,
@@ -454,4 +450,206 @@ fn main() -> Result<()> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn create_test_fortunes() -> Vec<Fortune> {
+        vec![
+            Fortune {
+                text: "Short fortune".to_string(),
+                database: "test".to_string(),
+            },
+            Fortune {
+                text: "This is a much longer fortune that exceeds the 160 character limit for short fortunes. It contains multiple sentences and goes on for quite a while to ensure it's definitely over the limit.".to_string(),
+                database: "test".to_string(),
+            },
+            Fortune {
+                text: "Offensive content".to_string(),
+                database: "offensive".to_string(),
+            },
+            Fortune {
+                text: "Star Trek fortune".to_string(),
+                database: "startrek".to_string(),
+            },
+        ]
+    }
+
+    #[test]
+    fn test_fortune_struct() {
+        let fortune = Fortune {
+            text: "Test fortune".to_string(),
+            database: "test".to_string(),
+        };
+        assert_eq!(fortune.text, "Test fortune");
+        assert_eq!(fortune.database, "test");
+    }
+
+    #[test]
+    fn test_is_offensive_database() {
+        assert!(McpServer::is_offensive_database("offensive"));
+        assert!(McpServer::is_offensive_database("limerick"));
+        assert!(McpServer::is_offensive_database("sex"));
+        assert!(McpServer::is_offensive_database("racist"));
+        assert!(McpServer::is_offensive_database("ethnic"));
+        assert!(!McpServer::is_offensive_database("computers"));
+        assert!(!McpServer::is_offensive_database("startrek"));
+    }
+
+    #[test]
+    fn test_filter_fortunes_short_only() {
+        let fortunes = create_test_fortunes();
+        let mut databases = HashMap::new();
+        for (idx, fortune) in fortunes.iter().enumerate() {
+            databases.entry(fortune.database.clone())
+                .or_insert_with(Vec::new)
+                .push(idx);
+        }
+
+        let server = McpServer {
+            name: "test".to_string(),
+            version: "0.1.0".to_string(),
+            fortunes,
+            databases,
+        };
+
+        let all_indices: Vec<usize> = (0..server.fortunes.len()).collect();
+        let filtered = server.filter_fortunes(&all_indices, true, true);
+
+        // Should only include fortunes with 160 chars or less
+        assert_eq!(filtered.len(), 3); // Excludes the long fortune
+        assert!(server.fortunes[filtered[0]].text.len() <= 160);
+    }
+
+    #[test]
+    fn test_filter_fortunes_no_offensive() {
+        let fortunes = create_test_fortunes();
+        let mut databases = HashMap::new();
+        for (idx, fortune) in fortunes.iter().enumerate() {
+            databases.entry(fortune.database.clone())
+                .or_insert_with(Vec::new)
+                .push(idx);
+        }
+
+        let server = McpServer {
+            name: "test".to_string(),
+            version: "0.1.0".to_string(),
+            fortunes,
+            databases,
+        };
+
+        let all_indices: Vec<usize> = (0..server.fortunes.len()).collect();
+        let filtered = server.filter_fortunes(&all_indices, false, false);
+
+        // Should exclude offensive database
+        assert_eq!(filtered.len(), 3); // Excludes offensive fortune
+        for &idx in &filtered {
+            assert!(!McpServer::is_offensive_database(&server.fortunes[idx].database));
+        }
+    }
+
+    #[test]
+    fn test_database_indexing() {
+        let fortunes = create_test_fortunes();
+        let mut databases = HashMap::new();
+        for (idx, fortune) in fortunes.iter().enumerate() {
+            databases.entry(fortune.database.clone())
+                .or_insert_with(Vec::new)
+                .push(idx);
+        }
+
+        assert_eq!(databases.get("test").unwrap().len(), 2);
+        assert_eq!(databases.get("offensive").unwrap().len(), 1);
+        assert_eq!(databases.get("startrek").unwrap().len(), 1);
+    }
+
+    #[test]
+    fn test_handle_initialize() {
+        let fortunes = create_test_fortunes();
+        let mut databases = HashMap::new();
+        for (idx, fortune) in fortunes.iter().enumerate() {
+            databases.entry(fortune.database.clone())
+                .or_insert_with(Vec::new)
+                .push(idx);
+        }
+
+        let server = McpServer {
+            name: "test-server".to_string(),
+            version: "1.0.0".to_string(),
+            fortunes,
+            databases,
+        };
+
+        let result = server.handle_initialize(None).unwrap();
+        assert_eq!(result["protocolVersion"], "2024-11-05");
+        assert_eq!(result["serverInfo"]["name"], "test-server");
+        assert_eq!(result["serverInfo"]["version"], "1.0.0");
+    }
+
+    #[test]
+    fn test_handle_tools_list() {
+        let fortunes = create_test_fortunes();
+        let mut databases = HashMap::new();
+        for (idx, fortune) in fortunes.iter().enumerate() {
+            databases.entry(fortune.database.clone())
+                .or_insert_with(Vec::new)
+                .push(idx);
+        }
+
+        let server = McpServer {
+            name: "test".to_string(),
+            version: "0.1.0".to_string(),
+            fortunes,
+            databases,
+        };
+
+        let result = server.handle_tools_list().unwrap();
+        assert!(result["tools"].is_array());
+        assert_eq!(result["tools"][0]["name"], "get_fortune");
+    }
+
+    #[test]
+    fn test_get_fortune_from_database() {
+        let fortunes = create_test_fortunes();
+        let mut databases = HashMap::new();
+        for (idx, fortune) in fortunes.iter().enumerate() {
+            databases.entry(fortune.database.clone())
+                .or_insert_with(Vec::new)
+                .push(idx);
+        }
+
+        let server = McpServer {
+            name: "test".to_string(),
+            version: "0.1.0".to_string(),
+            fortunes,
+            databases,
+        };
+
+        let fortune = server.get_fortune_from_database("startrek", false, true).unwrap();
+        assert_eq!(fortune.database, "startrek");
+        assert_eq!(fortune.text, "Star Trek fortune");
+    }
+
+    #[test]
+    fn test_get_fortune_from_invalid_database() {
+        let fortunes = create_test_fortunes();
+        let mut databases = HashMap::new();
+        for (idx, fortune) in fortunes.iter().enumerate() {
+            databases.entry(fortune.database.clone())
+                .or_insert_with(Vec::new)
+                .push(idx);
+        }
+
+        let server = McpServer {
+            name: "test".to_string(),
+            version: "0.1.0".to_string(),
+            fortunes,
+            databases,
+        };
+
+        let result = server.get_fortune_from_database("nonexistent", false, true);
+        assert!(result.is_err());
+    }
 }
