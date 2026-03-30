@@ -1,13 +1,13 @@
-use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
-use std::io::{self, BufRead, Write};
-use std::fs;
-use std::path::PathBuf;
-use std::collections::HashMap;
-use anyhow::{Result, Context};
+use anyhow::{Context, Result};
 use chrono::Local;
-use rand::{Rng, SeedableRng};
 use rand::rngs::StdRng;
+use rand::{Rng, SeedableRng};
+use serde::{Deserialize, Serialize};
+use serde_json::{Value, json};
+use std::collections::HashMap;
+use std::fs;
+use std::io::{self, BufRead, Write};
+use std::path::PathBuf;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct JsonRpcRequest {
@@ -51,7 +51,10 @@ struct McpServer {
 impl McpServer {
     fn new(name: String, version: String) -> Self {
         let fortunes = Self::load_fortunes().unwrap_or_else(|e| {
-            eprintln!("Warning: Failed to load fortune files: {}. Using default fortunes.", e);
+            eprintln!(
+                "Warning: Failed to load fortune files: {}. Using default fortunes.",
+                e
+            );
             vec![
                 "A beautiful, smart, and loving person will be coming into your life.",
                 "A golden egg of opportunity falls into your lap this month.",
@@ -68,21 +71,30 @@ impl McpServer {
                 "Your hard work will soon pay off.",
                 "Adventure can be real happiness.",
                 "Patience is your ally at the moment. Don't worry!",
-            ].iter().map(|text| Fortune {
+            ]
+            .iter()
+            .map(|text| Fortune {
                 text: text.to_string(),
                 database: "default".to_string(),
-            }).collect()
+            })
+            .collect()
         });
 
         // Build database index
         let mut databases: HashMap<String, Vec<usize>> = HashMap::new();
         for (idx, fortune) in fortunes.iter().enumerate() {
-            databases.entry(fortune.database.clone())
+            databases
+                .entry(fortune.database.clone())
                 .or_insert_with(Vec::new)
                 .push(idx);
         }
 
-        Self { name, version, fortunes, databases }
+        Self {
+            name,
+            version,
+            fortunes,
+            databases,
+        }
     }
 
     fn load_fortunes() -> Result<Vec<Fortune>> {
@@ -129,14 +141,19 @@ impl McpServer {
 
             // Only process regular files
             if path.is_file() {
-                let database_name = path.file_name()
+                let database_name = path
+                    .file_name()
                     .and_then(|n| n.to_str())
                     .unwrap_or("unknown")
                     .to_string();
 
                 match Self::parse_fortune_file(&path, &database_name) {
                     Ok(mut file_fortunes) => {
-                        eprintln!("Loaded {} fortunes from {}", file_fortunes.len(), path.display());
+                        eprintln!(
+                            "Loaded {} fortunes from {}",
+                            file_fortunes.len(),
+                            path.display()
+                        );
                         fortunes.append(&mut file_fortunes);
                     }
                     Err(e) => {
@@ -150,8 +167,7 @@ impl McpServer {
     }
 
     fn parse_fortune_file(path: &PathBuf, database: &str) -> Result<Vec<Fortune>> {
-        let content = fs::read_to_string(path)
-            .context("Failed to read fortune file")?;
+        let content = fs::read_to_string(path).context("Failed to read fortune file")?;
 
         let fortunes: Vec<Fortune> = content
             .split("\n%\n")
@@ -168,11 +184,20 @@ impl McpServer {
 
     fn is_offensive_database(db_name: &str) -> bool {
         // Common offensive fortune database names
-        matches!(db_name, "offensive" | "limerick" | "sex" | "racist" | "ethnic")
+        matches!(
+            db_name,
+            "offensive" | "limerick" | "sex" | "racist" | "ethnic"
+        )
     }
 
-    fn filter_fortunes(&self, indices: &[usize], short_only: bool, allow_offensive: bool) -> Vec<usize> {
-        indices.iter()
+    fn filter_fortunes(
+        &self,
+        indices: &[usize],
+        short_only: bool,
+        allow_offensive: bool,
+    ) -> Vec<usize> {
+        indices
+            .iter()
             .copied()
             .filter(|&idx| {
                 let fortune = &self.fortunes[idx];
@@ -192,12 +217,23 @@ impl McpServer {
             .collect()
     }
 
-    fn get_fortune_from_database(&self, database: &str, short_only: bool, allow_offensive: bool) -> Result<&Fortune, JsonRpcError> {
+    fn get_fortune_from_database(
+        &self,
+        database: &str,
+        short_only: bool,
+        allow_offensive: bool,
+    ) -> Result<&Fortune, JsonRpcError> {
         let indices = self.databases.get(database).ok_or_else(|| JsonRpcError {
             code: -32602,
-            message: format!("Unknown database: {}. Available databases: {}",
+            message: format!(
+                "Unknown database: {}. Available databases: {}",
                 database,
-                self.databases.keys().map(|k| k.as_str()).collect::<Vec<_>>().join(", ")),
+                self.databases
+                    .keys()
+                    .map(|k| k.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
             data: None,
         })?;
 
@@ -214,7 +250,10 @@ impl McpServer {
         if filtered.is_empty() {
             return Err(JsonRpcError {
                 code: -32602,
-                message: format!("No fortunes match the specified filters in database {}", database),
+                message: format!(
+                    "No fortunes match the specified filters in database {}",
+                    database
+                ),
                 data: None,
             });
         }
@@ -224,7 +263,10 @@ impl McpServer {
         if filtered.is_empty() {
             return Err(JsonRpcError {
                 code: -32602,
-                message: format!("No fortunes match the specified filters in database {}", database),
+                message: format!(
+                    "No fortunes match the specified filters in database {}",
+                    database
+                ),
                 data: None,
             });
         }
@@ -232,10 +274,7 @@ impl McpServer {
         // Get today's date at midnight as seed
         let now = Local::now();
         let date = now.date_naive();
-        let seed = date.and_hms_opt(0, 0, 0)
-            .unwrap()
-            .and_utc()
-            .timestamp() as u64;
+        let seed = date.and_hms_opt(0, 0, 0).unwrap().and_utc().timestamp() as u64;
 
         // Use deterministic RNG with date seed and database name
         let db_seed = seed.wrapping_add(database.bytes().map(|b| b as u64).sum::<u64>());
@@ -245,9 +284,17 @@ impl McpServer {
         Ok(&self.fortunes[filtered[idx]])
     }
 
-    fn get_filtered_fortune(&self, database: Option<&str>, short_only: bool, allow_offensive: bool) -> &Fortune {
+    fn get_filtered_fortune(
+        &self,
+        database: Option<&str>,
+        short_only: bool,
+        allow_offensive: bool,
+    ) -> &Fortune {
         let all_indices: Vec<usize> = if let Some(db) = database {
-            self.databases.get(db).map(|v| v.clone()).unwrap_or_default()
+            self.databases
+                .get(db)
+                .map(|v| v.clone())
+                .unwrap_or_default()
         } else {
             (0..self.fortunes.len()).collect()
         };
@@ -263,10 +310,7 @@ impl McpServer {
         // Get today's date at midnight as seed
         let now = Local::now();
         let date = now.date_naive();
-        let seed = date.and_hms_opt(0, 0, 0)
-            .unwrap()
-            .and_utc()
-            .timestamp() as u64;
+        let seed = date.and_hms_opt(0, 0, 0).unwrap().and_utc().timestamp() as u64;
 
         // Use deterministic RNG with date seed
         let mut rng = StdRng::seed_from_u64(seed);
@@ -367,9 +411,17 @@ impl McpServer {
         match tool_name {
             "get_fortune" => {
                 let args = params.get("arguments");
-                let database = args.and_then(|a| a.get("database")).and_then(|v| v.as_str());
-                let short_only = args.and_then(|a| a.get("short")).and_then(|v| v.as_bool()).unwrap_or(false);
-                let allow_offensive = args.and_then(|a| a.get("offensive")).and_then(|v| v.as_bool()).unwrap_or(false);
+                let database = args
+                    .and_then(|a| a.get("database"))
+                    .and_then(|v| v.as_str());
+                let short_only = args
+                    .and_then(|a| a.get("short"))
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false);
+                let allow_offensive = args
+                    .and_then(|a| a.get("offensive"))
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false);
 
                 let fortune = if let Some(db) = database {
                     self.get_fortune_from_database(db, short_only, allow_offensive)?
@@ -408,10 +460,7 @@ impl McpServer {
 }
 
 fn main() -> Result<()> {
-    let server = McpServer::new(
-        "fortune-mcp-server".to_string(),
-        "0.1.0".to_string(),
-    );
+    let server = McpServer::new("fortune-mcp-server".to_string(), "0.1.0".to_string());
 
     let stdin = io::stdin();
     let mut stdout = io::stdout();
@@ -503,7 +552,8 @@ mod tests {
         let fortunes = create_test_fortunes();
         let mut databases = HashMap::new();
         for (idx, fortune) in fortunes.iter().enumerate() {
-            databases.entry(fortune.database.clone())
+            databases
+                .entry(fortune.database.clone())
                 .or_insert_with(Vec::new)
                 .push(idx);
         }
@@ -528,7 +578,8 @@ mod tests {
         let fortunes = create_test_fortunes();
         let mut databases = HashMap::new();
         for (idx, fortune) in fortunes.iter().enumerate() {
-            databases.entry(fortune.database.clone())
+            databases
+                .entry(fortune.database.clone())
                 .or_insert_with(Vec::new)
                 .push(idx);
         }
@@ -546,7 +597,9 @@ mod tests {
         // Should exclude offensive database
         assert_eq!(filtered.len(), 3); // Excludes offensive fortune
         for &idx in &filtered {
-            assert!(!McpServer::is_offensive_database(&server.fortunes[idx].database));
+            assert!(!McpServer::is_offensive_database(
+                &server.fortunes[idx].database
+            ));
         }
     }
 
@@ -555,7 +608,8 @@ mod tests {
         let fortunes = create_test_fortunes();
         let mut databases = HashMap::new();
         for (idx, fortune) in fortunes.iter().enumerate() {
-            databases.entry(fortune.database.clone())
+            databases
+                .entry(fortune.database.clone())
                 .or_insert_with(Vec::new)
                 .push(idx);
         }
@@ -570,7 +624,8 @@ mod tests {
         let fortunes = create_test_fortunes();
         let mut databases = HashMap::new();
         for (idx, fortune) in fortunes.iter().enumerate() {
-            databases.entry(fortune.database.clone())
+            databases
+                .entry(fortune.database.clone())
                 .or_insert_with(Vec::new)
                 .push(idx);
         }
@@ -593,7 +648,8 @@ mod tests {
         let fortunes = create_test_fortunes();
         let mut databases = HashMap::new();
         for (idx, fortune) in fortunes.iter().enumerate() {
-            databases.entry(fortune.database.clone())
+            databases
+                .entry(fortune.database.clone())
                 .or_insert_with(Vec::new)
                 .push(idx);
         }
@@ -615,7 +671,8 @@ mod tests {
         let fortunes = create_test_fortunes();
         let mut databases = HashMap::new();
         for (idx, fortune) in fortunes.iter().enumerate() {
-            databases.entry(fortune.database.clone())
+            databases
+                .entry(fortune.database.clone())
                 .or_insert_with(Vec::new)
                 .push(idx);
         }
@@ -627,7 +684,9 @@ mod tests {
             databases,
         };
 
-        let fortune = server.get_fortune_from_database("startrek", false, true).unwrap();
+        let fortune = server
+            .get_fortune_from_database("startrek", false, true)
+            .unwrap();
         assert_eq!(fortune.database, "startrek");
         assert_eq!(fortune.text, "Star Trek fortune");
     }
@@ -637,7 +696,8 @@ mod tests {
         let fortunes = create_test_fortunes();
         let mut databases = HashMap::new();
         for (idx, fortune) in fortunes.iter().enumerate() {
-            databases.entry(fortune.database.clone())
+            databases
+                .entry(fortune.database.clone())
                 .or_insert_with(Vec::new)
                 .push(idx);
         }
