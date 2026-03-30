@@ -85,7 +85,7 @@ impl McpServer {
         for (idx, fortune) in fortunes.iter().enumerate() {
             databases
                 .entry(fortune.database.clone())
-                .or_insert_with(Vec::new)
+                .or_default()
                 .push(idx);
         }
 
@@ -133,10 +133,10 @@ impl McpServer {
             let path = entry.path();
 
             // Skip .dat files and hidden files
-            if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
-                if name.ends_with(".dat") || name.starts_with('.') {
-                    continue;
-                }
+            if let Some(name) = path.file_name().and_then(|n| n.to_str())
+                && (name.ends_with(".dat") || name.starts_with('.'))
+            {
+                continue;
             }
 
             // Only process regular files
@@ -291,10 +291,7 @@ impl McpServer {
         allow_offensive: bool,
     ) -> &Fortune {
         let all_indices: Vec<usize> = if let Some(db) = database {
-            self.databases
-                .get(db)
-                .map(|v| v.clone())
-                .unwrap_or_default()
+            self.databases.get(db).cloned().unwrap_or_default()
         } else {
             (0..self.fortunes.len()).collect()
         };
