@@ -2,7 +2,7 @@ name: Release
 
 on:
   push:
-    branches: [ master, main ]
+    branches: [ main ]
 
 jobs:
   release:
@@ -34,7 +34,7 @@ jobs:
         run: |
           cat > .releaserc.json <<'EOF'
           {
-            "branches": ["master", "main"],
+            "branches": ["main"],
             "plugins": [
               [
                 "@semantic-release/commit-analyzer",
