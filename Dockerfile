@@ -1,5 +1,5 @@
 # Build stage
-FROM --platform=$BUILDPLATFORM rust:1.99 AS builder
+FROM --platform=$BUILDPLATFORM rust:1.100 AS builder
 
 ARG TARGETPLATFORM
 ARG BUILDPLATFORM
